@@ -2,12 +2,10 @@
 
 namespace Taitech\TravfdPhp\Providers;
 
-// use function config_path;
-
 use Illuminate\Support\ServiceProvider;
-use Taitech\TravfdPhp\TraVfdClient;
+use Taitech\TravfdPhp\TravfdClient;;
 
-class TraVfdServiceProvider extends ServiceProvider
+class TravfdServiceProvider extends ServiceProvider
 {
     /**
      * Registers the TraVfdClient service with the application.
@@ -24,19 +22,19 @@ class TraVfdServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->mergeConfigFrom(__DIR__ . '/../../config/tra_vfd.php', 'tra_vfd');
+        $this->mergeConfigFrom(__DIR__ . '/../../config/travfd.php', 'travfd');
 
-        $this->app->singleton(TraVfdClient::class, function ($app) {
-            return new TraVfdClient();
+        $this->app->singleton(TravfdClient::class, function ($app) {
+            return new TravfdClient();
         });
 
-        $this->app->alias(TraVfdClient::class, 'tra-vfd');
+        $this->app->alias(TravfdClient::class, 'travfd');
     }
 
     public function boot()
     {
         $this->publishes([
-            __DIR__ . '/../../config/tra_vfd.php' => config_path('tra_vfd.php'),
+            __DIR__ . '/../../config/travfd.php' => config_path('travfd.php'),
         ], 'config');
     }
 }

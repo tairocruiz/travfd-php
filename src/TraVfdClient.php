@@ -5,6 +5,7 @@ namespace Taitech\TravfdPhp;
 use GuzzleHttp\Client;
 use SimpleXMLElement;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 
 // use function Taitech\TravfdPhp\config;
 
@@ -25,17 +26,17 @@ use Exception;
  *
  * The class also has some private helper methods for handling the API requests and responses.
  */
-class TraVfdClient
+class TravfdClient
 {
     private string $baseUrl;
-    private string $token;
+    private ?string $token;
     private Client $httpClient;
 
     public function __construct()
     {
         $this->baseUrl = config('tra_vfd.base_url');
         $this->httpClient = new Client(['base_uri' => $this->baseUrl]);
-        $this->token = $this->getToken();
+        $this->token = $this->getValidToken();
     }
 
     /**
@@ -46,19 +47,28 @@ class TraVfdClient
      *
      * @return string The authentication token, or an empty string if the token retrieval fails.
      */
-    private function getToken(): string
+    private function getValidToken(): string
     {
+        $cachedToken = Cache::get('travfd_token');
+        if ($cachedToken) {
+            return $cachedToken;
+        }
+
         try {
-            $response = $this->httpClient->post(config('tra_vfd.endpoints.token'), [
+            $response = $this->httpClient->post(config('travfd.endpoints.token'), [
                 'json' => [
-                    'tin' => config('tra_vfd.credentials.tin'),
-                    'username' => config('tra_vfd.credentials.username'),
-                    'password' => config('tra_vfd.credentials.password'),
+                    'tin' => config('travfd.credentials.tin'),
+                    'username' => config('travfd.credentials.username'),
+                    'password' => config('travfd.credentials.password'),
                 ]
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            return $data['token'] ?? '';
+            $token = $data['token'] ?? '';
+            if ($token) {
+                Cache::put('travfd_token', $token, now()->addMinutes(55));
+            }
+            return $token;
         } catch (Exception $e) {
             return '';
         }
@@ -74,7 +84,7 @@ class TraVfdClient
      */
     public function registerVfd(): array
     {
-        return $this->sendRequest('register', ['TIN' => config('tra_vfd.credentials.tin')]);
+        return $this->sendRequest('POST', config('travfd.endpoints.register'), ['TIN' => config('travfd.credentials.tin')], true);
     }
 
     /**
@@ -88,7 +98,8 @@ class TraVfdClient
      */
     public function sendReceipt(array $receiptData): array
     {
-        return $this->sendRequest('receipt', $receiptData);
+        $this->validateReceiptData($receiptData);
+        return $this->sendRequest('POST', config('travfd.endpoints.receipt'), $receiptData, true);
     }
 
     /**
@@ -102,7 +113,8 @@ class TraVfdClient
      */
     public function sendZReport(array $reportData): array
     {
-        return $this->sendRequest('z_report', $reportData);
+        // return $this->sendRequest('z_report', $reportData);
+        return $this->sendRequest('POST', config('travfd.endpoints.z_report'), $reportData, true);
     }
 
     /**
@@ -116,7 +128,8 @@ class TraVfdClient
      */
     public function verifyReceipt(string $receiptNumber): array
     {
-        return $this->sendRequest('verify', ['receiptNumber' => $receiptNumber]);
+        return $this->sendRequest('GET', config('travfd.endpoints.verify') . "?invoice={$receiptNumber}");
+        // return $this->sendRequest('verify', ['receiptNumber' => $receiptNumber]);
     }
 
 
@@ -127,19 +140,19 @@ class TraVfdClient
      * @param array $data The data to be sent in the request.
      * @return array The response from the TRA VFD API, which may include an error message if the request fails.
      */ 
-    private function sendRequest(string $endpointKey, array $data): array
+    private function sendRequest(string $method, string $endpoint, array $data = [], bool $isXml = false): array
     {
         try {
-            $xmlData = $this->arrayToXml($data);
-            $response = $this->httpClient->post(config('tra_vfd.endpoints.' . $endpointKey), [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $this->token,
-                    'Content-Type' => 'application/xml',
-                    'Accept' => 'application/xml',
-                ],
-                'body' => $xmlData
-            ]);
-
+            $options = ['headers' => ['Authorization' => 'Bearer ' . $this->token, 'Accept' => 'application/xml']];
+            
+            if ($isXml) {
+                $options['headers']['Content-Type'] = 'application/xml';
+                $options['body'] = $this->arrayToXml($data);
+            } else {
+                $options['json'] = $data;
+            }
+            
+            $response = $this->httpClient->request($method, $endpoint, $options);
             return $this->xmlToArray($response->getBody()->getContents());
         } catch (Exception $e) {
             return ['error' => $e->getMessage()];
@@ -186,5 +199,24 @@ class TraVfdClient
     {
         $simpleXml = new SimpleXMLElement($xml);
         return json_decode(json_encode($simpleXml), true);
+    }
+
+    /**
+     * Validates the receipt data array.
+     *
+     * This private function takes an associative array of receipt data and performs validation on certain fields.
+     * It removes non-numeric characters from the 'MOBILENUM' field and ensures the 'CUSTID' field is a valid 9-digit number
+     * if the 'CUSTIDTYPE' field is set to 1.
+     *
+     * @param array $data The associative array of receipt data to be validated.
+     */
+    private function validateReceiptData(array &$data): void
+    {
+        if (isset($data['MOBILENUM'])) {
+            $data['MOBILENUM'] = preg_replace('/[^0-9]/', '', $data['MOBILENUM']);
+        }
+        if (isset($data['CUSTIDTYPE']) && $data['CUSTIDTYPE'] == 1 && isset($data['CUSTID'])) {
+            $data['CUSTID'] = preg_match('/^\d{9}$/', $data['CUSTID']) ? $data['CUSTID'] : '';
+        }
     }
 }
