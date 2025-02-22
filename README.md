@@ -15,7 +15,7 @@
 ### 1. Install via Composer
 
 ```sh
-composer require taitech/trs-vfd-client
+composer require taitech/travfd-php
 ```
 
 ### 2. Publish Configuration
@@ -40,15 +40,15 @@ TRS_VFD_PASSWORD=your_password
 ### Register VFD
 
 ```php
-use Mboratech\TrsVfdClient\Facades\TrsVfd;
-$response = TrsVfd::registerVfd();
+use Taitech\TravfdPhp\Facades\Trsvfd;
+$response = Trsrfd::registerVfd();
 print_r($response);
 ```
 
 ### Fetch Token
 
 ```php
-$response = TrsVfd::getToken();
+$response = Trsvfd::getValidToken();
 print_r($response);
 ```
 
@@ -62,14 +62,14 @@ $receiptData = [
         'Total' => '1000.00'
     ]
 ];
-$response = TrsVfd::sendReceipt($receiptData);
+$response = Trsvfd::sendReceipt($receiptData);
 print_r($response);
 ```
 
 ### Submit Z Report
 
 ```php
-$response = TrsVfd::sendZReport([
+$response = Trsvfd::sendZReport([
     'TIN' => '123456789',
     'Date' => '2025-02-22',
     'TotalSales' => '5000.00'
@@ -80,7 +80,7 @@ print_r($response);
 ### Verify Receipt
 
 ```php
-$response = TraVfd::verifyReceipt('INV-12345');
+$response = Travfd::verifyReceipt('INV-12345');
 print_r($response);
 ```
 
