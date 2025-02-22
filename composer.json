@@ -1,0 +1,37 @@
+{
+    "name": "taitech/travfd-php",
+    "version": "1.0.0",
+    "description": "A composer package that helps to communicate with TRA [Tanzania Revenue Authority] VFD services",
+    "type": "library",
+    "require": {
+        "guzzlehttp/guzzle": "^7.0",
+        "ext-simplexml": "*",
+        "illuminate/support": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Taitech\\TravfdPhp\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Taitech\\TravfdPhp\\Providers\\TravfdServiceProvider"
+            ],
+            "aliases": {
+                "TrsVfd": "Taitech\\TravfdPhp\\Facades\\Travfd"
+            }
+        }
+    },
+    "authors": [
+        {
+            "name": "Aman S. Tairo",
+            "email": "tairocruise@yahoo.com"
+        }
+    ],
+    "minimum-stability": "alpha"
+}
