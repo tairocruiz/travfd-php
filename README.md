@@ -34,10 +34,10 @@ Update `.env` with TRA API credentials:
 
 ```env
 
-TRS_VFD_API_BASE=https://virtual.tra.go.tz/efdmsRctApi
-TRS_VFD_TIN=123456789
-TRS_VFD_USERNAME=your_username
-TRS_VFD_PASSWORD=your_password
+TRA_VFD_API_BASE=https://virtual.tra.go.tz/efdmsRctApi
+TRA_VFD_TIN=123456789
+TRA_VFD_USERNAME=your_username
+TRA_VFD_PASSWORD=your_password
 
 ```
 
@@ -47,8 +47,8 @@ TRS_VFD_PASSWORD=your_password
 
 ```php
 
-use Taitech\TravfdPhp\Facades\Trsvfd;
-$response = Trsrfd::registerVfd();
+use Taitech\TravfdPhp\Facades\Travfd;
+$response = Trarfd::registerVfd();
 print_r($response);
 
 ```
@@ -57,7 +57,7 @@ print_r($response);
 
 ```php
 
-$response = Trsvfd::getValidToken();
+$response = Travfd::getValidToken();
 print_r($response);
 
 ```
@@ -73,7 +73,7 @@ $receiptData = [
         'Total' => '1000.00'
     ]
 ];
-$response = Trsvfd::sendReceipt($receiptData);
+$response = Travfd::sendReceipt($receiptData);
 print_r($response);
 
 ```
@@ -82,7 +82,7 @@ print_r($response);
 
 ```php
 
-$response = Trsvfd::sendZReport([
+$response = Travfd::sendZReport([
     'TIN' => '123456789',
     'Date' => '2025-02-22',
     'TotalSales' => '5000.00'
