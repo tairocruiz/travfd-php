@@ -1,6 +1,6 @@
 {
     "name": "taitech/travfd-php",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "A composer package that helps to communicate with TRA [Tanzania Revenue Authority] VFD services",
     "type": "library",
     "require": {
