@@ -6,6 +6,8 @@ use GuzzleHttp\Client;
 use SimpleXMLElement;
 use Exception;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Carbon;
+use Taitech\TravfdPhp\Helpers\CryptoHelper;
 
 // use function Taitech\TravfdPhp\config;
 
@@ -34,10 +36,45 @@ class TravfdClient
 
     public function __construct()
     {
-        $this->baseUrl = config('tra_vfd.base_url');
-        $this->httpClient = new Client(['base_uri' => $this->baseUrl]);
-        $this->token = $this->getValidToken();
+        try {
+            $this->baseUrl = config('travfd.base_url');
+            $this->httpClient = new Client(['base_uri' => $this->baseUrl]);
+            $this->token = $this->getValidToken();
+        } catch (Exception $e) {
+            throw new Exception("Initialization failed: " . $e->getMessage());
+        }
     }
+
+    /**
+     * Load the PFX certificate and extract the private key.
+     *
+     * @param string $certPath Path to the PFX certificate file.
+     * @param string $password Password for the certificate.
+     * @return array Returns an array containing the private key and the certificate.
+     * @throws Exception If the certificate cannot be loaded.
+     */
+    private function loadKeyCertificate(string $certPath, string $password): array
+    {
+        if (!file_exists($certPath)) {
+            throw new Exception("Certificate file not found at $certPath.");
+        }
+
+        $certContent = file_get_contents($certPath);
+        if (!$certContent) {
+            throw new Exception("Failed to read the certificate file.");
+        }
+
+        $certs = [];
+        if (!openssl_pkcs12_read($certContent, $certs, $password)) {
+            throw new Exception("Failed to parse the PFX certificate. Ensure the password is correct.");
+        }
+
+        return [
+            'privateKey' => $certs['pkey'] ?? '',
+            'certKey'    => $certs['cert'] ?? '',
+        ];
+    }
+
 
     /**
      * Retrieves the authentication token for the TRA VFD API.
@@ -47,11 +84,11 @@ class TravfdClient
      *
      * @return string The authentication token, or an empty string if the token retrieval fails.
      */
+    
     private function getValidToken(): string
     {
-        $cachedToken = Cache::get('travfd_token');
-        if ($cachedToken) {
-            return $cachedToken;
+        if ($token = Cache::get('travfd_token')) {
+            return $token;
         }
 
         try {
@@ -64,11 +101,10 @@ class TravfdClient
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $token = $data['token'] ?? '';
-            if ($token) {
-                Cache::put('travfd_token', $token, now()->addMinutes(55));
+            if (!empty($data['token'])) {
+                Cache::put('travfd_token', $data['token'], Carbon::now()->addMinutes(55));
             }
-            return $token;
+            return $data['token'] ?? '';
         } catch (Exception $e) {
             return '';
         }
@@ -99,7 +135,7 @@ class TravfdClient
     public function sendReceipt(array $receiptData): array
     {
         $this->validateReceiptData($receiptData);
-        return $this->sendRequest('POST', config('travfd.endpoints.receipt'), $receiptData, true);
+        return $this->sendRequest('POST', config('travfd.endpoints.receipt'), $receiptData, true, true);
     }
 
     /**
@@ -114,7 +150,7 @@ class TravfdClient
     public function sendZReport(array $reportData): array
     {
         // return $this->sendRequest('z_report', $reportData);
-        return $this->sendRequest('POST', config('travfd.endpoints.z_report'), $reportData, true);
+        return $this->sendRequest('POST', config('travfd.endpoints.z_report'), $reportData, true, true);
     }
 
     /**
@@ -136,28 +172,49 @@ class TravfdClient
     /**
      * Sends a request to the TRA VFD API.
      * 
-     * @param string $endpointKey The key for
+     * This method sends a request to the TRA VFD API using the provided HTTP method, endpoint, and data.
+     * It handles authentication and error handling for the request.
+     * @param string $method The HTTP method to use for the request.
+     * @param string $endpointKey The key for the endpoint configuration.
      * @param array $data The data to be sent in the request.
+     * @param bool $isXml Whether the request should be sent as XML.
      * @return array The response from the TRA VFD API, which may include an error message if the request fails.
      */ 
-    private function sendRequest(string $method, string $endpoint, array $data = [], bool $isXml = false): array
+    private function sendRequest(string $method, string $endpoint, array $data = [], bool $isXml = false, bool $encrypt = false): array
     {
         try {
             $options = ['headers' => ['Authorization' => 'Bearer ' . $this->token, 'Accept' => 'application/xml']];
-            
             if ($isXml) {
                 $options['headers']['Content-Type'] = 'application/xml';
-                $options['body'] = $this->arrayToXml($data);
+                $xmlData = $this->arrayToXml($data);
+                $options['body'] = $encrypt ? CryptoHelper::encrypt($xmlData) : $xmlData;
             } else {
                 $options['json'] = $data;
             }
             
             $response = $this->httpClient->request($method, $endpoint, $options);
-            return $this->xmlToArray($response->getBody()->getContents());
+
+            // Decrypt the response if it was encrypted
+            $responseData = $response->getBody()->getContents();
+            if ($encrypt) {
+                $responseData = CryptoHelper::decrypt($responseData);
+            }
+
+            return $this->xmlToArray($responseData);
+        } catch (\GuzzleHttp\Exception\ClientException $e) {
+            if ($e->getResponse()->getStatusCode() === 401) { // Token expired
+                $this->token = $this->getValidToken(); // Refresh token
+                Cache::put('travfd_token', $this->token, Carbon::now()->addMinutes(55));
+                return $this->sendRequest($method, $endpoint, $data, $isXml); // Retry
+            }
+            return ['error [Http:]' => $e->getMessage()];
         } catch (Exception $e) {
-            return ['error' => $e->getMessage()];
+            return ['error [Exception:]' => $e->getMessage()];
         }
+
+        
     }
+
 
     /**
      * Converts an associative array to an XML string.
@@ -215,8 +272,8 @@ class TravfdClient
         if (isset($data['MOBILENUM'])) {
             $data['MOBILENUM'] = preg_replace('/[^0-9]/', '', $data['MOBILENUM']);
         }
-        if (isset($data['CUSTIDTYPE']) && $data['CUSTIDTYPE'] == 1 && isset($data['CUSTID'])) {
-            $data['CUSTID'] = preg_match('/^\d{9}$/', $data['CUSTID']) ? $data['CUSTID'] : '';
+        if (!empty($data['CUSTIDTYPE']) && $data['CUSTIDTYPE'] == 1 && !empty($data['CUSTID'])) {
+            $data['CUSTID'] = preg_match('/^\d{9}$/', $data['CUSTID']) ? $data['CUSTID'] : null;
         }
     }
 }

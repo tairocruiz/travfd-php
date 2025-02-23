@@ -15,13 +15,17 @@
 ### 1. Install via Composer
 
 ```sh
+
 composer require taitech/travfd-php
+
 ```
 
 ### 2. Publish Configuration
 
 ```sh
+
 php artisan vendor:publish --tag=config
+
 ```
 
 ### 3. Add Environment Variables
@@ -29,10 +33,12 @@ php artisan vendor:publish --tag=config
 Update `.env` with TRA API credentials:
 
 ```env
+
 TRS_VFD_API_BASE=https://virtual.tra.go.tz/efdmsRctApi
 TRS_VFD_TIN=123456789
 TRS_VFD_USERNAME=your_username
 TRS_VFD_PASSWORD=your_password
+
 ```
 
 ## Usage
@@ -40,21 +46,26 @@ TRS_VFD_PASSWORD=your_password
 ### Register VFD
 
 ```php
+
 use Taitech\TravfdPhp\Facades\Trsvfd;
 $response = Trsrfd::registerVfd();
 print_r($response);
+
 ```
 
 ### Fetch Token
 
 ```php
+
 $response = Trsvfd::getValidToken();
 print_r($response);
+
 ```
 
 ### Submit Receipt
 
 ```php
+
 $receiptData = [
     'Invoice' => [
         'TIN' => '123456789',
@@ -64,24 +75,29 @@ $receiptData = [
 ];
 $response = Trsvfd::sendReceipt($receiptData);
 print_r($response);
+
 ```
 
 ### Submit Z Report
 
 ```php
+
 $response = Trsvfd::sendZReport([
     'TIN' => '123456789',
     'Date' => '2025-02-22',
     'TotalSales' => '5000.00'
 ]);
 print_r($response);
+
 ```
 
 ### Verify Receipt
 
 ```php
+
 $response = Travfd::verifyReceipt('INV-12345');
 print_r($response);
+
 ```
 
 ## License
